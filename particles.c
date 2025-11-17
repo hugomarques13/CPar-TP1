@@ -13,6 +13,7 @@
 #include <math.h>
 #include <string.h>
 #include <stdio.h>
+#include <omp.h>
 
 #include "particles.h"
 
@@ -932,7 +933,8 @@ void spec_advance( t_species* spec, t_emf* emf, t_current* current )
 
     double energy = 0;
 
-    #pragma omp parallel for reduction(+:energy)
+    #pragma omp parallel
+    #pragma omp for reduction(+:energy)
     // Advance particles
     for (int i=0; i<spec->np; i++) {
 
@@ -1048,17 +1050,18 @@ void spec_advance( t_species* spec, t_emf* emf, t_current* current )
         if (spec -> moving_window )	spec_move_window( spec );
 
         // Use absorbing boundaries along x
-        int i = 0;
-        while ( i < spec -> np ) {
+        #pragma omp parallel for
+        for (int i = 0; i < spec -> np ; i++) {
             if (( spec -> part[i].ix < 0 ) || ( spec -> part[i].ix >= nx0 )) {
                 spec -> part[i] = spec -> part[ -- spec -> np ];
+                i--;
                 continue;
             }
-            i++;
         }
 
     } else {
         // Use periodic boundaries in x
+        #pragma omp parallel for
         for (int i=0; i<spec->np; i++) {
             spec -> part[i].ix += (( spec -> part[i].ix < 0 ) ? nx0 : 0 ) - (( spec -> part[i].ix >= nx0 ) ? nx0 : 0);
         }

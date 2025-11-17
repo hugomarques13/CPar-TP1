@@ -1,6 +1,6 @@
 # GCC options
-CC = gcc
-CFLAGS = -Ofast -g -std=c99 -pedantic -Wall
+CC = scorep gcc
+CFLAGS = -Ofast -g -std=c99 -fopenmp -pedantic -Wall
 #CFLAGS = -Kfast -std=c99 
 LDFLAGS = -lm
 
