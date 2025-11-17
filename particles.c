@@ -932,6 +932,7 @@ void spec_advance( t_species* spec, t_emf* emf, t_current* current )
 
     double energy = 0;
 
+    #pragma omp parallel for reduction(+:energy)
     // Advance particles
     for (int i=0; i<spec->np; i++) {
 
