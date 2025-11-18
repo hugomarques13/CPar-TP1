@@ -952,70 +952,71 @@ void spec_advance( t_species* spec, t_emf* emf, t_current* current )
         int di;
         float dx;
 
+        // Cache particle data
+        t_part* p = &spec->part[i];
+        
         // Load particle momenta
-        ux = spec -> part[i].ux;
-        uy = spec -> part[i].uy;
-        uz = spec -> part[i].uz;
+        ux = p->ux;
+        uy = p->uy;
+        uz = p->uz;
 
         // interpolate fields
-        interpolate_fld( emf -> E_part, emf -> B_part, &spec -> part[i], &Ep, &Bp );
-        // Ep.x = Ep.y = Ep.z = Bp.x = Bp.y = Bp.z = 0;
+        interpolate_fld( emf->E_part, emf->B_part, p, &Ep, &Bp );
 
         // advance u using Boris scheme
-        Ep.x *= tem;
-        Ep.y *= tem;
-        Ep.z *= tem;
+        float Ep_x = Ep.x * tem;
+        float Ep_y = Ep.y * tem;
+        float Ep_z = Ep.z * tem;
 
-        utx = ux + Ep.x;
-        uty = uy + Ep.y;
-        utz = uz + Ep.z;
+        utx = ux + Ep_x;
+        uty = uy + Ep_y;
+        utz = uz + Ep_z;
 
         // Perform first half of the rotation
         // Get time centered gamma
         u2 = utx*utx + uty*uty + utz*utz;
-        gamma = sqrtf( 1 + u2 );
+        gamma = sqrtf( 1.0f + u2 );
 
         // Accumulate time centered energy
-        energy += u2 / ( 1 + gamma );
+        energy += u2 / ( 1.0f + gamma );
 
         gtem = tem / gamma;
 
-        Bp.x *= gtem;
-        Bp.y *= gtem;
-        Bp.z *= gtem;
+        float Bp_x = Bp.x * gtem;
+        float Bp_y = Bp.y * gtem;
+        float Bp_z = Bp.z * gtem;
 
-        otsq = 2.0f / ( 1.0f + Bp.x*Bp.x + Bp.y*Bp.y + Bp.z*Bp.z );
+        otsq = 2.0f / ( 1.0f + Bp_x*Bp_x + Bp_y*Bp_y + Bp_z*Bp_z );
 
-        ux = utx + uty*Bp.z - utz*Bp.y;
-        uy = uty + utz*Bp.x - utx*Bp.z;
-        uz = utz + utx*Bp.y - uty*Bp.x;
+        ux = utx + uty*Bp_z - utz*Bp_y;
+        uy = uty + utz*Bp_x - utx*Bp_z;
+        uz = utz + utx*Bp_y - uty*Bp_x;
 
         // Perform second half of the rotation
+        Bp_x *= otsq;
+        Bp_y *= otsq;
+        Bp_z *= otsq;
 
-        Bp.x *= otsq;
-        Bp.y *= otsq;
-        Bp.z *= otsq;
-
-        utx += uy*Bp.z - uz*Bp.y;
-        uty += uz*Bp.x - ux*Bp.z;
-        utz += ux*Bp.y - uy*Bp.x;
+        utx += uy*Bp_z - uz*Bp_y;
+        uty += uz*Bp_x - ux*Bp_z;
+        utz += ux*Bp_y - uy*Bp_x;
 
         // Perform second half of electric field acceleration
-        ux = utx + Ep.x;
-        uy = uty + Ep.y;
-        uz = utz + Ep.z;
+        ux = utx + Ep_x;
+        uy = uty + Ep_y;
+        uz = utz + Ep_z;
 
         // Store new momenta
-        spec -> part[i].ux = ux;
-        spec -> part[i].uy = uy;
-        spec -> part[i].uz = uz;
+        p->ux = ux;
+        p->uy = uy;
+        p->uz = uz;
 
         // push particle
         rg = 1.0f / sqrtf(1.0f + ux*ux + uy*uy + uz*uz);
 
         dx = dt_dx * rg * ux;
 
-        x1 = spec -> part[i].x + dx;
+        x1 = p->x + dx;
 
         di = ltrim(x1);
 
@@ -1024,21 +1025,12 @@ void spec_advance( t_species* spec, t_emf* emf, t_current* current )
         float qvy = spec->q * uy * rg;
         float qvz = spec->q * uz * rg;
 
-        // deposit current using Eskirepov method
-        // dep_current_esk( spec -> part[i].ix, di,
-        // 				 spec -> part[i].x, x1,
-        // 				 qnx, qvy, qvz,
-        // 				 current );
-
-        dep_current_zamb( spec -> part[i].ix, di,
-                         spec -> part[i].x, dx,
-                         qnx, qvy, qvz,
-                         current );
+        // deposit current using Zamb method
+        dep_current_zamb( p->ix, di, p->x, dx, qnx, qvy, qvz, current );
 
         // Store results
-        spec -> part[i].x = x1;
-        spec -> part[i].ix += di;
-
+        p->x = x1;
+        p->ix += di;
     }
 
     // Store energy
