@@ -267,12 +267,12 @@ void kernel_x( t_current* const current, const float sa, const float sb ){
 
     float3* restrict const J = current -> J;
 
-    float3 fl = J[-1];
-    float3 f0 = J[ 0];
-
+      #pragma omp parallel for
     for( int i = 0; i < current -> nx; i++) {
 
         float3 fu = J[i + 1];
+        float3 f0 = J[i];
+        float3 fl = (i == 0) ? J[-1] : J[i-1]; // make sure it works for i=0
 
         float3 fs;
 
@@ -281,10 +281,6 @@ void kernel_x( t_current* const current, const float sa, const float sb ){
         fs.z = sa * fl.z + sb * f0.z + sa * fu.z;
 
         J[i] = fs;
-
-        fl = f0;
-        f0 = fu;
-
     }
 
     // Update x boundaries for periodic boundaries
