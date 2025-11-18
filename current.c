@@ -267,7 +267,6 @@ void kernel_x( t_current* const current, const float sa, const float sb ){
 
     float3* restrict const J = current -> J;
 
-      #pragma omp parallel for
     for( int i = 0; i < current -> nx; i++) {
 
         float3 fu = J[i + 1];
@@ -285,10 +284,10 @@ void kernel_x( t_current* const current, const float sa, const float sb ){
 
     // Update x boundaries for periodic boundaries
     if ( current -> bc_type == CURRENT_BC_PERIODIC ) {
-      #pragma omp parallel for
+      
         for(int i = -current->gc[0]; i<0; i++)
             J[ i ] = J[ current->nx + i ];
-      #pragma omp parallel for
+      
         for (int i=0; i<current->gc[1]; i++)
             J[ current->nx + i ] = J[ i ];
     }
@@ -316,6 +315,7 @@ void current_smooth( t_current* const current ) {
     if ( current -> smooth.xtype != NONE ) {
         // binomial filter
         sa = 0.25; sb = 0.5;
+        #pragma omp parallel for
         for( int i = 0; i < current -> smooth.xlevel; i++) {
             kernel_x( current, 0.25, 0.5 );
         }
