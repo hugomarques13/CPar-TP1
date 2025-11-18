@@ -1050,6 +1050,7 @@ void spec_advance( t_species* spec, t_emf* emf, t_current* current )
         if (spec -> moving_window )	spec_move_window( spec );
 
         // Use absorbing boundaries along x
+            #pragma omp parallel for
         for (int i = 0; i < spec -> np ; i++) {
             if (( spec -> part[i].ix < 0 ) || ( spec -> part[i].ix >= nx0 )) {
                 spec -> part[i] = spec -> part[ -- spec -> np ];
@@ -1060,6 +1061,7 @@ void spec_advance( t_species* spec, t_emf* emf, t_current* current )
 
     } else {
         // Use periodic boundaries in x
+        #pragma omp parallel for
         for (int i=0; i<spec->np; i++) {
             spec -> part[i].ix += (( spec -> part[i].ix < 0 ) ? nx0 : 0 ) - (( spec -> part[i].ix >= nx0 ) ? nx0 : 0);
         }
