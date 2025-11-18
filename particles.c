@@ -724,63 +724,63 @@ void dep_current_zamb( int ix0, int di,
     int vnp = 1;
 
     // split
-    float qvy_half = qvy * 0.5f;
-    float qvz_half = qvz * 0.5f;
-    
     vp[0].x0 = x0;
     vp[0].dx = dx;
-    vp[0].x1 = x0 + dx;
-    vp[0].qvy = qvy_half;
-    vp[0].qvz = qvz_half;
+
+    vp[0].x1 = x0+dx;
+
+    vp[0].qvy = qvy/2.0;
+    vp[0].qvz = qvz/2.0;
+
     vp[0].ix = ix0;
 
     // x split
     if ( di != 0 ) {
+
+        //int ib = ( di+1 )>>1;
         int ib = ( di == 1 );
-        float delta = (vp[0].x1 - ib) / dx;
-        float delta_inv = 1.0f - delta;
+
+        float delta = (x0+dx-ib)/dx;
 
         // Add new particle
-        vp[1].x0 = 1 - ib;
-        vp[1].x1 = vp[0].x1 - di;
-        vp[1].dx = dx * delta;
+        vp[1].x0 = 1-ib;
+        vp[1].x1 = (x0 + dx) - di;
+        vp[1].dx = dx*delta;
         vp[1].ix = ix0 + di;
-        vp[1].qvy = qvy_half * delta;
-        vp[1].qvz = qvz_half * delta;
+
+        vp[1].qvy = vp[0].qvy*delta;
+        vp[1].qvz = vp[0].qvz*delta;
 
         // Correct previous particle
         vp[0].x1 = ib;
-        vp[0].dx *= delta_inv;
-        vp[0].qvy *= delta_inv;
-        vp[0].qvz *= delta_inv;
+        vp[0].dx *= (1.0f-delta);
 
-        vnp = 2;
+        vp[0].qvy *= (1.0f-delta);
+        vp[0].qvz *= (1.0f-delta);
+
+        vnp++;
+
     }
 
     // Deposit virtual particle currents
-    float3* restrict const J = current->J;
+    float3* restrict const J = current -> J;
 
     for (int k = 0; k < vnp; k++) {
-        float S0x0 = 1.0f - vp[k].x0;
-        float S0x1 = vp[k].x0;
-        float S1x0 = 1.0f - vp[k].x1;
-        float S1x1 = vp[k].x1;
+        float S0x[2], S1x[2];
 
-        float sum0 = S0x0 + S1x0;
-        float diff0 = (S0x0 - S1x0) * 0.5f;
-        float sum1 = S0x1 + S1x1;
-        float diff1 = (S0x1 - S1x1) * 0.5f;
-        
-        float weight0 = sum0 + diff0;
-        float weight1 = sum1 + diff1;
+        S0x[0] = 1.0f - vp[k].x0;
+        S0x[1] = vp[k].x0;
 
-        int ix = vp[k].ix;
-        J[ix].x     += qnx * vp[k].dx;
-        J[ix].y     += vp[k].qvy * weight0;
-        J[ix + 1].y += vp[k].qvy * weight1;
-        J[ix].z     += vp[k].qvz * weight0;
-        J[ix + 1].z += vp[k].qvz * weight1;
+        S1x[0] = 1.0f - vp[k].x1;
+        S1x[1] = vp[k].x1;
+
+        J[ vp[k].ix     ].x += qnx * vp[k].dx;
+        J[ vp[k].ix     ].y += vp[k].qvy * (S0x[0]+S1x[0]+(S0x[0]-S1x[0])/2.0f);
+        J[ vp[k].ix + 1 ].y += vp[k].qvy * (S0x[1]+S1x[1]+(S0x[1]-S1x[1])/2.0f);
+        J[ vp[k].ix     ].z += vp[k].qvz * (S0x[0]+S1x[0]+(S0x[0]-S1x[0])/2.0f);
+        J[ vp[k].ix  +1 ].z += vp[k].qvz * (S0x[1]+S1x[1]+(S0x[1]-S1x[1])/2.0f);
     }
+
 }
 
 /*********************************************************************************************
@@ -869,22 +869,25 @@ void spec_sort( t_species* spec )
 void interpolate_fld( const float3* restrict const E, const float3* restrict const B,
               const t_part* restrict const part, float3* restrict const Ep, float3* restrict const Bp )
 {
-    int i = part->ix;
-    float w1 = part->x;
-    
-    float w1h = w1 + (w1 < 0.5f ? 0.5f : -0.5f);
-    int ih = i + (w1 < 0.5f ? -1 : 0);
-    
-    float w1_inv = 1.0f - w1;
-    float w1h_inv = 1.0f - w1h;
+    int i, ih;
+    float w1, w1h;
 
-    Ep->x = E[ih].x * w1h_inv + E[ih+1].x * w1h;
-    Ep->y = E[i].y  * w1_inv  + E[i+1].y  * w1;
-    Ep->z = E[i].z  * w1_inv  + E[i+1].z  * w1;
+    i = part->ix;
 
-    Bp->x = B[i].x  * w1_inv  + B[i+1].x  * w1;
-    Bp->y = B[ih].y * w1h_inv + B[ih+1].y * w1h;
-    Bp->z = B[ih].z * w1h_inv + B[ih+1].z * w1h;
+    w1 = part->x;
+    ih = (w1 <0.5f)? -1 : 0;
+    w1h = w1 + ((w1 <0.5f)?0.5f:-0.5f);
+
+    ih += i;
+
+    Ep->x = E[ih].x * (1.0f - w1h) + E[ih+1].x * w1h;
+    Ep->y = E[i ].y * (1.0f -  w1) + E[i+1 ].y * w1;
+    Ep->z = E[i ].z * (1.0f -  w1) + E[i+1 ].z * w1;
+
+    Bp->x = B[i ].x * (1.0f  - w1) + B[i+1 ].x * w1;
+    Bp->y = B[ih].y * (1.0f - w1h) + B[ih+1].y * w1h;
+    Bp->z = B[ih].z * (1.0f - w1h) + B[ih+1].z * w1h;
+
 }
 
 /**
