@@ -14,6 +14,7 @@
 #include <assert.h>
 #include <string.h>
 #include <math.h>
+#include <omp.h>
 
 #include "emf.h"
 #include "zdf.h"
