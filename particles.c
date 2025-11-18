@@ -1018,7 +1018,7 @@ void spec_advance( t_species* spec, t_emf* emf, t_current* current )
 
         x1 = p->x + dx;
 
-        di = ltrim(x1);
+        di = ( x1 >= 1.0f ) - ( x1 < 0.0f );
 
         x1 -= di;
 
