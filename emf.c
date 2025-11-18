@@ -427,7 +427,7 @@ void yee_b( t_emf *emf, const float dt )
 	float dt_dx = dt / emf->dx;
 
 	// Canonical implementation
-      #pragma omp parallel for schedule(static, 256)
+      #pragma omp parallel for
 	for (int i=-1; i<=emf->nx; i++) {
 		// B[ i ].x += 0;  // Bx does not evolve in 1D
 		B[ i ].y += (   dt_dx * ( E[i+1].z - E[ i ].z) );
@@ -452,7 +452,7 @@ void yee_e( t_emf *emf, const t_current *current, const float dt )
     const int nx = emf->nx;
 
 	// Canonical implementation
-      #pragma omp parallel for schedule(static, 256)
+      #pragma omp parallel for
 	for (int i = 0; i <= nx+1; i++) {
 		E[i].x += (                                - dt * J[i].x );
 		E[i].y += ( - dt_dx * ( B[i].z - B[i-1].z) - dt * J[i].y );
@@ -519,14 +519,14 @@ void emf_move_window( t_emf *emf ){
 	    float3* const restrict B = emf -> B;
 
 		// Shift data left 1 cell and zero rightmost cells
-            #pragma omp parallel for schedule(static,256)
+            #pragma omp parallel for
 		for (int i = -emf->gc[0]; i < emf->nx+emf->gc[1] - 1; i++) {
 			E[ i ] = E[ i + 1 ];
 			B[ i ] = B[ i + 1 ];
 		}
 
 	    const float3 zero_fld = {0.,0.,0.};
-          #pragma omp parallel for schedule(static,64)
+          #pragma omp parallel for
 		for(int i = emf->nx - 1; i < emf->nx+emf->gc[1]; i ++) {
 			E[ i ] = zero_fld;
 			B[ i ] = zero_fld;
