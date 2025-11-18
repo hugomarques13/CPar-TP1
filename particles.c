@@ -863,17 +863,15 @@ void spec_sort( t_species* spec )
  * @param Bp    B-field interpolated at particle position
  */
 void interpolate_fld( const float3* restrict const E, const float3* restrict const B,
-              const t_part* restrict const part, float3* restrict const Ep, float3* restrict const Bp )
+                     const t_part* restrict const part, float3* restrict const Ep, float3* restrict const Bp )
 {
     int i, ih;
     float w1, w1h;
 
     i = part->ix;
-
     w1 = part->x;
     ih = (w1 <0.5f)? -1 : 0;
     w1h = w1 + ((w1 <0.5f)?0.5f:-0.5f);
-
     ih += i;
 
     Ep->x = E[ih].x * (1.0f - w1h) + E[ih+1].x * w1h;
@@ -883,7 +881,6 @@ void interpolate_fld( const float3* restrict const E, const float3* restrict con
     Bp->x = B[i ].x * (1.0f  - w1) + B[i+1 ].x * w1;
     Bp->y = B[ih].y * (1.0f - w1h) + B[ih+1].y * w1h;
     Bp->z = B[ih].z * (1.0f - w1h) + B[ih+1].z * w1h;
-
 }
 
 /**
