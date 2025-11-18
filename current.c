@@ -315,7 +315,7 @@ void current_smooth( t_current* const current ) {
     if ( current -> smooth.xtype != NONE ) {
         // binomial filter
         sa = 0.25; sb = 0.5;
-        #pragma omp parallel for
+        
         for( int i = 0; i < current -> smooth.xlevel; i++) {
             kernel_x( current, 0.25, 0.5 );
         }
