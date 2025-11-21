@@ -105,7 +105,6 @@ void spec_set_u( t_species* spec, const int start, const int end )
     // Accumulate momentum in each cell
     #pragma omp parallel
     {
-        // Primeira região paralela - acumulação
         #pragma omp for
         for (int i = start; i <= end; i++) {
             const int idx = spec->part[i].ix;
@@ -115,9 +114,8 @@ void spec_set_u( t_species* spec, const int start, const int end )
             npc[idx] += 1;
         }
 
-        // Barreira implícita garante que todas as threads terminaram a acumulação
-        
-        // Segunda região paralela - normalização
+        // Normalize to the number of particles in each cell to get the
+        // average momentum in each cell
         #pragma omp for
         for(int i = 0; i < spec->nx; i++) {
             const float norm = (npc[i] > 0) ? 1.0f/npc[i] : 0;
@@ -126,9 +124,7 @@ void spec_set_u( t_species* spec, const int start, const int end )
             net_u[i].z *= norm;
         }
 
-        // Barreira implícita garante que a normalização foi completada
-        
-        // Terceira região paralela - ajuste final
+        // Subtract average momentum and add fluid component
         #pragma omp for
         for (int i = start; i <= end; i++) {
             const int idx = spec->part[i].ix;
