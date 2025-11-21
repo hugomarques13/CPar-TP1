@@ -102,39 +102,15 @@ void spec_set_u( t_species* spec, const int start, const int end )
     memset(npc, 0, (spec->nx) * sizeof(int) );
 
     // Accumulate momentum in each cell
-    #pragma omp parallel
-    {
-        float3 *local_net_u = calloc(spec->nx, sizeof(float3));
-        int *local_npc = calloc(spec->nx, sizeof(int));
+    #pragma omp parallel for
+    for (int i = start; i <= end; i++) {
+        const int idx  = spec -> part[i].ix;
 
-        if (local_net_u == NULL || local_npc == NULL) {
-            exit(1);
-        }
+        net_u[ idx ].x += spec->part[i].ux;
+        net_u[ idx ].y += spec->part[i].uy;
+        net_u[ idx ].z += spec->part[i].uz;
 
-        #pragma omp for
-        for (int i = start; i <= end; i++) {
-            const int idx  = spec -> part[i].ix;
-
-            local_net_u[idx].x += spec->part[i].ux;
-            local_net_u[idx].y += spec->part[i].uy;
-            local_net_u[idx].z += spec->part[i].uz;
-        
-            local_npc[idx] += 1;
-        }
-
-        #pragma omp critical
-        {
-            for (int i = 0; i < spec->nx; i++) {
-                net_u[i].x += local_net_u[i].x;
-                net_u[i].y += local_net_u[i].y;
-                net_u[i].z += local_net_u[i].z;
-
-                npc[i] += local_npc[i];
-            }
-        }
-
-        free(local_net_u);
-        free(local_npc);
+        npc[ idx ] += 1;
     }
 
     // Normalize to the number of particles in each cell to get the
