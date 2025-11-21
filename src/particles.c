@@ -102,36 +102,39 @@ void spec_set_u( t_species* spec, const int start, const int end )
     memset(npc, 0, (spec->nx) * sizeof(int) );
 
     // Accumulate momentum in each cell
-    #pragma omp parallel for
-    for (int i = start; i <= end; i++) {
-        const int idx  = spec -> part[i].ix;
+    #pragma omp parallel
+    {
+        // Primeira região paralela - acumulação
+        #pragma omp for
+        for (int i = start; i <= end; i++) {
+            const int idx = spec->part[i].ix;
+            net_u[idx].x += spec->part[i].ux;
+            net_u[idx].y += spec->part[i].uy;
+            net_u[idx].z += spec->part[i].uz;
+            npc[idx] += 1;
+        }
 
-        net_u[ idx ].x += spec->part[i].ux;
-        net_u[ idx ].y += spec->part[i].uy;
-        net_u[ idx ].z += spec->part[i].uz;
+        // Barreira implícita garante que todas as threads terminaram a acumulação
+        
+        // Segunda região paralela - normalização
+        #pragma omp for
+        for(int i = 0; i < spec->nx; i++) {
+            const float norm = (npc[i] > 0) ? 1.0f/npc[i] : 0;
+            net_u[i].x *= norm;
+            net_u[i].y *= norm;
+            net_u[i].z *= norm;
+        }
 
-        npc[ idx ] += 1;
-    }
-
-    // Normalize to the number of particles in each cell to get the
-    // average momentum in each cell
-    #pragma omp parallel for
-    for(int i =0; i< spec->nx; i++ ) {
-        const float norm = (npc[ i ] > 0) ? 1.0f/npc[i] : 0;
-
-        net_u[ i ].x *= norm;
-        net_u[ i ].y *= norm;
-        net_u[ i ].z *= norm;
-    }
-
-    // Subtract average momentum and add fluid component
-    #pragma omp parallel for
-    for (int i = start; i <= end; i++) {
-        const int idx  = spec -> part[i].ix;
-
-        spec->part[i].ux += spec -> ufl[0] - net_u[ idx ].x;
-        spec->part[i].uy += spec -> ufl[1] - net_u[ idx ].y;
-        spec->part[i].uz += spec -> ufl[2] - net_u[ idx ].z;
+        // Barreira implícita garante que a normalização foi completada
+        
+        // Terceira região paralela - ajuste final
+        #pragma omp for
+        for (int i = start; i <= end; i++) {
+            const int idx = spec->part[i].ix;
+            spec->part[i].ux += spec->ufl[0] - net_u[idx].x;
+            spec->part[i].uy += spec->ufl[1] - net_u[idx].y;
+            spec->part[i].uz += spec->ufl[2] - net_u[idx].z;
+        }
     }
 
     // Free temporary memory
