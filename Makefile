@@ -14,7 +14,8 @@ LDFLAGS = -lm
 
 # Clang options
 #CC = clang
-#CFLAGS = -Ofast -std=c99 -pedantic
+#CFLAGS = -Ofast -g -std=c99 -fopenmp -pedantic -Wall -march=native -fno-omit-frame-pointer
+#-Rpass=openmp-opt
 #LDFLAGS = -lm
 
 
