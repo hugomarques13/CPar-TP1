@@ -85,58 +85,73 @@ void spec_set_u( t_species* spec, const int start, const int end )
      * Version 1 momentum initialization
      */
 
-    // Initialize thermal component
+    const int num_cells = spec->nx;
+    
+    // Alocação no stack para evitar overhead de heap
+    float3 net_u[num_cells];
+    int npc[num_cells];
+    
+    memset(net_u, 0, sizeof(net_u));
+    memset(npc, 0, sizeof(npc));
+    
+    // Pré-computar valores
+    const float uth[] = {spec->uth[0], spec->uth[1], spec->uth[2]};
+    const float ufl[] = {spec->ufl[0], spec->ufl[1], spec->ufl[2]};
+    t_part* restrict part = spec->part;
+    
+    // Loop 1: Inicialização térmica e acumulação
+    #pragma omp parallel
+    {
+        // Thread-local accumulation para reduzir contenção
+        float3 local_net_u[num_cells];
+        int local_npc[num_cells];
+        memset(local_net_u, 0, sizeof(local_net_u));
+        memset(local_npc, 0, sizeof(local_npc));
+        
+        #pragma omp for nowait
+        for (int i = start; i <= end; i++) {
+            // Inicialização térmica
+            part[i].ux = uth[0] * rand_norm();
+            part[i].uy = uth[1] * rand_norm();
+            part[i].uz = uth[2] * rand_norm();
+            
+            // Acumulação local
+            const int idx = part[i].ix;
+            local_net_u[idx].x += part[i].ux;
+            local_net_u[idx].y += part[i].uy;
+            local_net_u[idx].z += part[i].uz;
+            local_npc[idx]++;
+        }
+        
+        // Redução para arrays globais
+        #pragma omp critical
+        for (int i = 0; i < num_cells; i++) {
+            net_u[i].x += local_net_u[i].x;
+            net_u[i].y += local_net_u[i].y;
+            net_u[i].z += local_net_u[i].z;
+            npc[i] += local_npc[i];
+        }
+    }
+    
+    // Loop 2: Normalização
+    #pragma omp parallel for
+    for(int i = 0; i < num_cells; i++) {
+        if (npc[i] > 0) {
+            const float inv_n = 1.0f / npc[i];
+            net_u[i].x *= inv_n;
+            net_u[i].y *= inv_n;
+            net_u[i].z *= inv_n;
+        }
+    }
+    
+    // Loop 3: Ajuste final
     #pragma omp parallel for
     for (int i = start; i <= end; i++) {
-        spec->part[i].ux = spec -> uth[0] * rand_norm();
-        spec->part[i].uy = spec -> uth[1] * rand_norm();
-        spec->part[i].uz = spec -> uth[2] * rand_norm();
+        const int idx = part[i].ix;
+        part[i].ux += ufl[0] - net_u[idx].x;
+        part[i].uy += ufl[1] - net_u[idx].y;
+        part[i].uz += ufl[2] - net_u[idx].z;
     }
-
-    // Calculate net momentum in each cell
-    float3 * restrict net_u = (float3 *) malloc( spec->nx * sizeof(float3));
-    int * restrict    npc   = (int *) malloc( spec->nx * sizeof(int));
-
-    // Zero momentum grids
-    memset(net_u, 0, spec->nx * sizeof(float3) );
-    memset(npc, 0, (spec->nx) * sizeof(int) );
-
-    // Accumulate momentum in each cell
-    #pragma omp parallel for
-    for (int i = start; i <= end; i++) {
-        const int idx  = spec -> part[i].ix;
-
-        net_u[ idx ].x += spec->part[i].ux;
-        net_u[ idx ].y += spec->part[i].uy;
-        net_u[ idx ].z += spec->part[i].uz;
-
-        npc[ idx ] += 1;
-    }
-
-    // Normalize to the number of particles in each cell to get the
-    // average momentum in each cell
-    #pragma omp parallel for
-    for(int i =0; i< spec->nx; i++ ) {
-        const float norm = (npc[ i ] > 0) ? 1.0f/npc[i] : 0;
-
-        net_u[ i ].x *= norm;
-        net_u[ i ].y *= norm;
-        net_u[ i ].z *= norm;
-    }
-
-    // Subtract average momentum and add fluid component
-    #pragma omp parallel for
-    for (int i = start; i <= end; i++) {
-        const int idx  = spec -> part[i].ix;
-
-        spec->part[i].ux += spec -> ufl[0] - net_u[ idx ].x;
-        spec->part[i].uy += spec -> ufl[1] - net_u[ idx ].y;
-        spec->part[i].uz += spec -> ufl[2] - net_u[ idx ].z;
-    }
-
-    // Free temporary memory
-    free( npc );
-    free( net_u );
 
 #endif
 }
