@@ -521,6 +521,8 @@ void emf_move_window( t_emf *emf ){
 
 		float3 *ECopy = malloc(sizeof(float3) * (emf->nx + emf->gc[1] + emf->gc[0]));
 		float3 *BCopy = malloc(sizeof(float3) * (emf->nx + emf->gc[1] + emf->gc[0]));
+
+		const float3 zero_fld = {0.,0.,0.};
 		
 		#pragma omp parallel
 		{
@@ -536,17 +538,16 @@ void emf_move_window( t_emf *emf ){
 				E[ i ] = ECopy[ i + 1 + emf->gc[0] ];
 				B[ i ] = BCopy[ i + 1 + emf->gc[0] ];
 			}
+
+			#pragma omp for
+			for(int i = emf->nx - 1; i < emf->nx+emf->gc[1]; i ++) {
+				E[ i ] = zero_fld;
+				B[ i ] = zero_fld;
+			}
 		}
 
 		free(ECopy);
 		free(BCopy);
-
-	    const float3 zero_fld = {0.,0.,0.};
-          #pragma omp parallel for
-		for(int i = emf->nx - 1; i < emf->nx+emf->gc[1]; i ++) {
-			E[ i ] = zero_fld;
-			B[ i ] = zero_fld;
-		}
 
 		// Increase moving window counter
 		emf -> n_move++;
