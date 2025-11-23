@@ -263,43 +263,52 @@ void get_smooth_comp( int n, float* sa, float* sb) {
  * @param sa kernel a value
  * @param sb kernel b value
  */
-void kernel_x(t_current* const current, const float sa, const float sb)
-{
-    float3* restrict const J_in = current->J;
-    const int nx = current->nx;
-    const size_t bytes = (size_t)nx * sizeof(float3);
+void kernel_x( t_current* const current, const float sa, const float sb ){
 
-    float3* J_out = (float3*) malloc(bytes);
+    float3* restrict const J = current -> J;
+    float3 *JCopy = malloc(sizeof(float3) * current->nx);
+    #pragma omp parallel
+    {
 
-    #pragma omp parallel for
-    for (int i = 0; i < nx; ++i) {
-
-        const float3 fl = (i == 0)      ? J_in[nx - 1] : J_in[i - 1];
-        const float3 f0 = J_in[i];
-        const float3 fu = (i + 1 == nx) ? J_in[0]      : J_in[i + 1];
-
-        float3 fs;
-        fs.x = sa * fl.x + sb * f0.x + sa * fu.x;
-        fs.y = sa * fl.y + sb * f0.y + sa * fu.y;
-        fs.z = sa * fl.z + sb * f0.z + sa * fu.z;
-
-        J_out[i] = fs;
-    }
-    memcpy(J_in, J_out, bytes);
-
-    free(J_out);
-
-    // Periodic boundaries
-    if (current->bc_type == CURRENT_BC_PERIODIC) {
-
-        for (int i = -current->gc[0]; i < 0; ++i) {
-            J_in[i] = J_in[nx + i];
+        #pragma omp for
+        for(int i = 0; i < current -> nx; i++) {
+        JCopy[i] = J[i];
         }
+    
+        #pragma omp for
+        for( int i = 0; i < current -> nx; i++) {
+            
+            float3 fu = JCopy[i + 1];
+            float3 f0 = JCopy[ i     ];
+            float3 fl = JCopy[ i - 1 ];
+            
+            float3 fs;
+            
+            fs.x = sa * fl.x + sb * f0.x + sa * fu.x;
+            fs.y = sa * fl.y + sb * f0.y + sa * fu.y;
+            fs.z = sa * fl.z + sb * f0.z + sa * fu.z;
 
-        for (int i = 0; i < current->gc[1]; ++i) {
-            J_in[nx + i] = J_in[i];
+            J[i] = fs;
+            
+        }
+        
+        
+        // Update x boundaries for periodic boundaries
+        if ( current -> bc_type == CURRENT_BC_PERIODIC ) {
+            #pragma omp for
+            for(int i = -current->gc[0]; i<0; i++){
+                J[ i ] = J[ current->nx + i ];
+            }
+
+            #pragma omp for
+            for (int i=0; i<current->gc[1]; i++){
+                J[ current->nx + i ] = J[ i ];
+            }
         }
     }
+    
+    free(JCopy);
+
 }
 
 
