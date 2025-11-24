@@ -1,0 +1,170 @@
+#!/bin/bash
+
+# Script de teste para benchmark de threads com perf stat
+# Testa de 1 a 20 threads
+
+# Nome do executável
+EXECUTABLE="../zpic"
+INPUT_DIR="../input"
+MAKE_COMMAND="make"
+
+# Ficheiro de output
+OUTPUT_FILE="thread_benchmark_results.txt"
+CSV_FILE="thread_benchmark.csv"
+PERF_FILE="perf_stats.txt"
+
+# Array para armazenar resultados
+declare -a results
+declare -a times
+
+# Verificar se o directório input existe
+if [ ! -d "$INPUT_DIR" ]; then
+    echo "Erro: Directório $INPUT_DIR não encontrado!"
+    exit 1
+fi
+
+# Verificar se perf está disponível
+if ! command -v perf &> /dev/null; then
+    echo "Erro: 'perf' não está instalado!"
+    echo "Instale com: sudo apt-get install linux-tools-common linux-tools-generic"
+    exit 1
+fi
+
+# Compilar o código primeiro
+echo "A compilar o código..."
+make clean
+make
+
+if [ ! -f "$EXECUTABLE" ]; then
+    echo "Erro: Executável $EXECUTABLE não foi criado!"
+    exit 1
+fi
+
+echo "Iniciando benchmark de threads com perf stat -r 5..."
+echo "======================================================"
+
+# Ficheiro para estatísticas detalhadas do perf
+echo "Estatísticas detalhadas do perf stat" > $PERF_FILE
+echo "=====================================" >> $PERF_FILE
+
+# Executar para diferentes números de threads
+for threads in {1..20}; do
+    echo "A testar com $threads thread(s)..."
+    
+    # Definir número de threads
+    export OMP_NUM_THREADS=$threads
+    
+    # Executar com perf stat -r 5 (5 execuções)
+    echo "" >> $PERF_FILE
+    echo "Threads: $threads" >> $PERF_FILE
+    echo "----------------" >> $PERF_FILE
+    
+    # Executar perf stat e capturar output
+    perf_output=$(perf stat -r 5 -o perf_tmp.txt $EXECUTABLE 2>&1)
+    
+    # Guardar output detalhado do perf
+    cat perf_tmp.txt >> $PERF_FILE
+    
+    # Extrair o tempo médio do output do perf
+    # O perf stat mostra uma linha como: "5.123 seconds time elapsed ( +-  0.123 )"
+    time_elapsed=$(grep "seconds time elapsed" perf_tmp.txt | head -1)
+    
+    # Extrair o valor numérico do tempo (primeiro número antes de "seconds")
+    time_value=$(echo "$time_elapsed" | awk '{print $1}')
+    
+    # Limpar ficheiro temporário
+    rm -f perf_tmp.txt
+    
+    # Verificar se conseguiu extrair o tempo
+    if [ -z "$time_value" ] || [ "$time_value" = "?" ]; then
+        echo "  AVISO: Não foi possível extrair o tempo para $threads threads"
+        time_value="0"
+    fi
+    
+    # Guardar resultados
+    results[$threads]="$threads $time_value"
+    times[$threads]=$time_value
+    
+    echo "  Threads: $threads, Tempo médio: ${time_value}s (5 execuções)"
+done
+
+# Calcular speedup (relativo a 1 thread)
+base_time=${times[1]}
+echo ""
+echo "Resultados do Benchmark:"
+echo "======================================"
+
+# Escrever para ficheiro de texto
+echo "Resultados do Benchmark de Threads (perf stat -r 5)" > $OUTPUT_FILE
+echo "====================================================" >> $OUTPUT_FILE
+echo "Threads | Tempo (s) | Speedup | Eficiência (%)" >> $OUTPUT_FILE
+echo "--------|-----------|---------|---------------" >> $OUTPUT_FILE
+
+# Escrever para CSV
+echo "Threads,Tempo(s),Speedup,Eficiencia(%)" > $CSV_FILE
+
+for threads in {1..20}; do
+    time=${times[$threads]}
+    
+    # Converter para float para cálculos (usando bc)
+    if [ $(echo "$time > 0" | bc 2>/dev/null || echo "0") -eq 1 ] && [ $(echo "$base_time > 0" | bc 2>/dev/null || echo "0") -eq 1 ]; then
+        speedup=$(echo "scale=2; $base_time / $time" | bc 2>/dev/null || echo "N/A")
+        efficiency=$(echo "scale=2; ($speedup / $threads) * 100" | bc 2>/dev/null || echo "N/A")
+    else
+        speedup="N/A"
+        efficiency="N/A"
+    fi
+    
+    # Formatar output para tabela
+    if [ "$time" != "N/A" ] && [ "$time" != "0" ]; then
+        printf "%7d | %9.3f | %7s | %13s\n" $threads $time $speedup $efficiency >> $OUTPUT_FILE
+        echo "$threads,$time,$speedup,$efficiency" >> $CSV_FILE
+        
+        # Mostrar no terminal também
+        printf "%7d | %9.3f | %7s | %13s\n" $threads $time $speedup $efficiency
+    else
+        printf "%7d | %9s | %7s | %13s\n" $threads "N/A" "N/A" "N/A" >> $OUTPUT_FILE
+        echo "$threads,N/A,N/A,N/A" >> $CSV_FILE
+        printf "%7d | %9s | %7s | %13s\n" $threads "N/A" "N/A" "N/A"
+    fi
+done
+
+echo ""
+echo "Resultados guardados em:"
+echo "  - $OUTPUT_FILE (formato de tabela)"
+echo "  - $CSV_FILE (formato CSV)"
+echo "  - $PERF_FILE (estatísticas detalhadas do perf)"
+
+# Gerar gráfico simples (se gnuplot estiver disponível)
+if command -v gnuplot &> /dev/null && [ -f "$CSV_FILE" ]; then
+    echo "A gerar gráfico..."
+    
+    # Criar versão do CSV sem valores N/A para o gnuplot
+    grep -v "N/A" $CSV_FILE > plot_data.csv
+    
+    if [ -s plot_data.csv ]; then
+        gnuplot << EOF
+        set terminal pngcairo size 1000,600 enhanced font 'Verdana,10'
+        set output 'thread_benchmark_plot.png'
+        set title 'Benchmark de Threads - perf stat -r 5'
+        set xlabel 'Número de Threads'
+        set ylabel 'Tempo (s)'
+        set y2label 'Speedup'
+        set y2tics
+        set grid
+        set key outside right top
+        
+        plot 'plot_data.csv' using 1:2 with linespoints title 'Tempo (s)' axes x1y1, \
+             'plot_data.csv' using 1:3 with linespoints title 'Speedup' axes x1y2
+EOF
+        rm -f plot_data.csv
+        echo "  - thread_benchmark_plot.png (gráfico)"
+    else
+        echo "  - Não foi possível gerar gráfico (dados insuficientes)"
+        rm -f plot_data.csv
+    fi
+fi
+
+echo ""
+echo "Benchmark completo!"
+echo "Nota: Os tempos são médias de 5 execuções por configuração de threads"
