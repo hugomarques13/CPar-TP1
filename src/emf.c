@@ -525,13 +525,13 @@ void emf_move_window( t_emf *emf ){
 		
 		#pragma omp parallel
 		{
-			#pragma omp for schedule(dynamic)
+			#pragma omp for schedule(dynamic,10)
 			for (int i = -emf->gc[0]; i < emf->nx+emf->gc[1] - 1; i++) {
 				E[ i ] = E[ i + 1 ];
 				B[ i ] = B[ i + 1 ];
 			}
 
-			#pragma omp for schedule(dynamic)
+			#pragma omp for schedule(dynamic,10)
 			for(int i = emf->nx - 1; i < emf->nx+emf->gc[1]; i ++) {
 				E[ i ] = zero_fld;
 				B[ i ] = zero_fld;
