@@ -522,13 +522,23 @@ void emf_move_window( t_emf *emf ) {
         const int gc0 = emf->gc[0];
         const int gc1 = emf->gc[1];
         
-        // Sequential shift - guaranteed no data races
-        for (int i = -gc0; i < nx - 1; i++) {
-            E[i] = E[i + 1];
-            B[i] = B[i + 1];
+        // Parallel shift with careful chunking
+        #pragma omp parallel
+        {
+            int nthreads = omp_get_num_threads();
+            int tid = omp_get_thread_num();
+            int chunk_size = (nx + gc0 + gc1) / nthreads;
+            int start = -gc0 + tid * chunk_size;
+            int end = (tid == nthreads - 1) ? (nx - 1) : start + chunk_size;
+            
+            // Each thread shifts its own contiguous chunk
+            for (int i = start; i < end; i++) {
+                E[i] = E[i + 1];
+                B[i] = B[i + 1];
+            }
         }
         
-        // Parallel zeroing (embarrassingly parallel)
+        // Parallel zeroing
         #pragma omp parallel for
         for (int i = nx - 1; i < nx + gc1; i++) {
             E[i] = (float3){0., 0., 0.};
