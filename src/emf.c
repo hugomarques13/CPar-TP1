@@ -513,45 +513,33 @@ void emf_update_gc( t_emf *emf )
  * 
  * @param emf 
  */
-void emf_move_window( t_emf *emf ){
-	if ( ( emf -> iter * emf -> dt ) > emf->dx*( emf -> n_move + 1 ) ) {
-
-	    float3* const restrict E = emf -> E;
-	    float3* const restrict B = emf -> B;
-
-		float3 *ECopy = malloc(sizeof(float3) * (emf->nx + emf->gc[1] + emf->gc[0]));
-		float3 *BCopy = malloc(sizeof(float3) * (emf->nx + emf->gc[1] + emf->gc[0]));
-
-		const float3 zero_fld = {0.,0.,0.};
-		
-		#pragma omp parallel
-		{
-			#pragma omp for
-			for(int i = -emf->gc[0]; i < emf->nx + emf->gc[1]; i++) {
-				ECopy[i + emf->gc[0]] = E[i];
-				BCopy[i + emf->gc[0]] = B[i];
-			}
-
-			// Shift data left 1 cell and zero rightmost cells
-			#pragma omp for
-			for (int i = -emf->gc[0]; i < emf->nx + emf->gc[1]; i++) {
-				E[ i ] = ECopy[ i + 1 + emf->gc[0]];
-				B[ i ] = BCopy[ i + 1 + emf->gc[0]];
-			}
-
-			#pragma omp for
-			for(int i = emf->nx - 1; i < emf->nx + emf->gc[1]; i ++) {
-				E[ i ] = zero_fld;
-				B[ i ] = zero_fld;
-			}
-		}
-
-		free(ECopy);
-		free(BCopy);
-
-		// Increase moving window counter
-		emf -> n_move++;
-	}
+void emf_move_window( t_emf *emf ) {
+    if ( ( emf -> iter * emf -> dt ) > emf->dx*( emf -> n_move + 1 ) ) {
+        
+        float3* const restrict E = emf -> E;
+        float3* const restrict B = emf -> B;
+        const int nx = emf->nx;
+        const int gc0 = emf->gc[0];
+        const int gc1 = emf->gc[1];
+        const float3 zero_fld = {0., 0., 0.};
+        
+        // Phase 1: Shift all data left by 1 cell
+        #pragma omp parallel for
+        for (int i = -gc0; i < nx - 1; i++) {
+            E[i] = E[i + 1];
+            B[i] = B[i + 1];
+        }
+        
+        
+        // Phase 2: Zero the rightmost cells
+        #pragma omp parallel for
+        for (int i = nx - 1; i < nx + gc1; i++) {
+            E[i] = zero_fld;
+            B[i] = zero_fld;
+        }
+        
+        emf->n_move++;
+    }
 }
 
 /**
