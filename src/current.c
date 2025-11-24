@@ -266,22 +266,22 @@ void get_smooth_comp( int n, float* sa, float* sb) {
 void kernel_x( t_current* const current, const float sa, const float sb ){
 
     float3* restrict const J = current -> J;
-    float3 *JCopy = malloc(sizeof(float3) * current->nx);
+    float3 *J_copy = malloc(sizeof(float3) * current->nx);
     
     #pragma omp parallel
     {
 
         #pragma omp for
         for(int i = 0; i < current -> nx; i++) {
-        JCopy[i] = J[i];
+            J_copy[i] = J[i];
         }
     
         #pragma omp for
         for( int i = 0; i < current -> nx; i++) {
             
-            float3 fu = JCopy[i + 1];
-            float3 f0 = JCopy[ i     ];
-            float3 fl = JCopy[ i - 1 ];
+            float3 fu = J_copy[i + 1];
+            float3 f0 = J_copy[i];
+            float3 fl = J_copy[i-1];
             
             float3 fs;
             
@@ -298,12 +298,12 @@ void kernel_x( t_current* const current, const float sa, const float sb ){
         if ( current -> bc_type == CURRENT_BC_PERIODIC ) {
             #pragma omp for
             for(int i = -current->gc[0]; i<0; i++){
-                J[ i ] = J[ current->nx + i ];
+                J[i] = J[current->nx + i];
             }
 
             #pragma omp for
             for (int i=0; i<current->gc[1]; i++){
-                J[ current->nx + i ] = J[ i ];
+                J[current->nx + i] = J[i];
             }
         }
     }
