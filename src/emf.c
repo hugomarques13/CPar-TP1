@@ -523,8 +523,11 @@ void emf_move_window( t_emf *emf ){
 
 		const int n_total = emf->nx + emf->gc[0] + emf->gc[1];
 
-		float3* E_temp = malloc( n_total * sizeof(float3) );
-		float3* B_temp = malloc( n_total * sizeof(float3) );
+		float3* E_temp_base = malloc( n_total * sizeof(float3) );
+		float3* B_temp_base = malloc( n_total * sizeof(float3) );
+
+		float3* E_temp = E_temp_base + emf->gc[0];
+		float3* B_temp = B_temp_base + emf->gc[0];
 
         // Shift data left 1 cell and zero rightmost cells
 		#pragma omp parallel
@@ -549,8 +552,8 @@ void emf_move_window( t_emf *emf ){
 		
 		}
 
-		free( E_temp );
-		free( B_temp );
+		free( E_temp_base );
+		free( B_temp_base );
         // Increase moving window counter
         emf -> n_move++;
     }
