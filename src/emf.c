@@ -521,44 +521,42 @@ void emf_move_window( t_emf *emf ) {
         const int nx = emf->nx;
         const int gc0 = emf->gc[0];
         const int gc1 = emf->gc[1];
-        const int total_size = nx + gc0 + gc1;
+        const int totalSize = nx + gc0 + gc1;
         
         #pragma omp parallel
         {
             int nthreads = omp_get_num_threads();
             int tid = omp_get_thread_num();
             
-            // Phase 1: Calculate non-overlapping read chunks
-            int read_chunk_size = (total_size - 1 + nthreads - 1) / nthreads;
-            int read_start = tid * read_chunk_size - gc0;
-            int read_end = read_start + read_chunk_size;
-            read_end = (read_end > total_size - gc0 - 1) ? total_size - gc0 - 1 : read_end;
+            int readChunkSize = (totalSize - 1 + nthreads - 1) / nthreads;
+            int readStart = tid * readChunkSize - gc0;
+            int readEnd = readStart + readChunkSize;
+            readEnd = (readEnd > totalSize - gc0 - 1) ? totalSize - gc0 - 1 : readEnd;
             
             // Each thread reads its source data to temporary storage
-            int read_len = read_end - read_start;
-            float3* E_read = malloc(read_len * sizeof(float3));
-            float3* B_read = malloc(read_len * sizeof(float3));
+            int readLen = readEnd - readStart;
+            float3* E_read = malloc(readLen * sizeof(float3));
+            float3* B_read = malloc(readLen * sizeof(float3));
             
-            for (int i = 0; i < read_len; i++) {
-                int src_idx = read_start + i + 1;  // Read from i+1
-                E_read[i] = E[src_idx];
-                B_read[i] = B[src_idx];
+            for (int i = 0; i < readLen; i++) {
+                int srcIdx = readStart + i + 1;  // Read from i+1
+                E_read[i] = E[srcIdx];
+                B_read[i] = B[srcIdx];
             }
             
             #pragma omp barrier  // All threads finish reading
             
-            // Phase 2: Calculate non-overlapping write chunks  
-            int write_chunk_size = (total_size - 1 + nthreads - 1) / nthreads;
-            int write_start = tid * write_chunk_size - gc0;
-            int write_end = write_start + write_chunk_size;
-            write_end = (write_end > total_size - gc0 - 1) ? total_size - gc0 - 1 : write_end;
+            int writeChunkSize = (totalSize - 1 + nthreads - 1) / nthreads;
+            int writeStart = tid * writeChunkSize - gc0;
+            int writeEnd = writeStart + writeChunkSize;
+            writeEnd = (writeEnd > totalSize - gc0 - 1) ? totalSize - gc0 - 1 : writeEnd;
             
             // Each thread writes to its destination
-            int write_len = write_end - write_start;
-            for (int i = 0; i < write_len; i++) {
-                int dest_idx = write_start + i;  // Write to i
-                E[dest_idx] = E_read[i];
-                B[dest_idx] = B_read[i];
+            int writeLen = writeEnd - writeStart;
+            for (int i = 0; i < writeLen; i++) {
+                int destIdx = writeStart + i;  // Write to i
+                E[destIdx] = E_read[i];
+                B[destIdx] = B_read[i];
             }
             
             free(E_read);
@@ -566,14 +564,13 @@ void emf_move_window( t_emf *emf ) {
             
             #pragma omp barrier  // All shifts complete
             
-            // Phase 3: Zero rightmost cells with non-overlapping chunks
-            int zero_size = gc1 + 1;  // from nx-1 to nx+gc1-1
-            int zero_chunk_size = (zero_size + nthreads - 1) / nthreads;
-            int zero_start = nx - 1 + tid * zero_chunk_size;
-            int zero_end = zero_start + zero_chunk_size;
-            zero_end = (zero_end > nx + gc1) ? nx + gc1 : zero_end;
+            int zeroSize = gc1 + 1;  // from nx-1 to nx+gc1-1
+            int zeroChunkSize = (zeroSize + nthreads - 1) / nthreads;
+            int zeroStart = nx - 1 + tid * zeroChunkSize;
+            int zeroEnd = zeroStart + zeroChunkSize;
+            zeroEnd = (zeroEnd > nx + gc1) ? nx + gc1 : zeroEnd;
             
-            for (int i = zero_start; i < zero_end; i++) {
+            for (int i = zeroStart; i < zeroEnd; i++) {
                 E[i] = (float3){0., 0., 0.};
                 B[i] = (float3){0., 0., 0.};
             }
