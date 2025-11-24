@@ -523,15 +523,14 @@ void emf_move_window( t_emf *emf ) {
         const int gc1 = emf->gc[1];
         const float3 zero_fld = {0., 0., 0.};
         
-        // Phase 1: Shift all data left by 1 cell
+        // Shift right-to-left to avoid dependencies
         #pragma omp parallel for
-        for (int i = -gc0; i < nx - 1; i++) {
+        for (int i = nx - 2; i >= -gc0; i--) {
             E[i] = E[i + 1];
             B[i] = B[i + 1];
         }
         
-        
-        // Phase 2: Zero the rightmost cells
+        // Zero the rightmost cells
         #pragma omp parallel for
         for (int i = nx - 1; i < nx + gc1; i++) {
             E[i] = zero_fld;
