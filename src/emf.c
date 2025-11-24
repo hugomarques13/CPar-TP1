@@ -521,28 +521,61 @@ void emf_move_window( t_emf *emf ) {
         const int nx = emf->nx;
         const int gc0 = emf->gc[0];
         const int gc1 = emf->gc[1];
+        const int total_size = nx + gc0 + gc1;
         
-        // Parallel shift with careful chunking
         #pragma omp parallel
         {
             int nthreads = omp_get_num_threads();
             int tid = omp_get_thread_num();
-            int chunk_size = (nx + gc0 + gc1) / nthreads;
-            int start = -gc0 + tid * chunk_size;
-            int end = (tid == nthreads - 1) ? (nx - 1) : start + chunk_size;
             
-            // Each thread shifts its own contiguous chunk
-            for (int i = start; i < end; i++) {
-                E[i] = E[i + 1];
-                B[i] = B[i + 1];
+            // Calculate chunks with 1-cell overlap for dependencies
+            int chunk_size = (total_size + nthreads - 1) / nthreads;
+            int start = tid * chunk_size - gc0;
+            int end = (tid + 1) * chunk_size - gc0;
+            end = (end > total_size - gc0) ? total_size - gc0 : end;
+            
+            // Each thread copies its chunk to temporary storage first
+            int chunk_len = end - start;
+            float3* E_temp = malloc(chunk_len * sizeof(float3));
+            float3* B_temp = malloc(chunk_len * sizeof(float3));
+            
+            // Read original values (no races - read-only)
+            for (int i = 0; i < chunk_len; i++) {
+                E_temp[i] = E[start + i + 1];  // Read from i+1
+                B_temp[i] = B[start + i + 1];
             }
-        }
-        
-        // Parallel zeroing
-        #pragma omp parallel for
-        for (int i = nx - 1; i < nx + gc1; i++) {
-            E[i] = (float3){0., 0., 0.};
-            B[i] = (float3){0., 0., 0.};
+            
+            #pragma omp barrier  // All reads complete
+            
+            // Write shifted values back
+            for (int i = 0; i < chunk_len - 1; i++) {
+                E[start + i] = E_temp[i];
+                B[start + i] = B_temp[i];
+            }
+            
+            // Handle the last element specially for the last chunk
+            if (tid == nthreads - 1 && start + chunk_len - 1 < nx - 1) {
+                E[start + chunk_len - 1] = E_temp[chunk_len - 1];
+                B[start + chunk_len - 1] = B_temp[chunk_len - 1];
+            }
+            
+            free(E_temp);
+            free(B_temp);
+            
+            #pragma omp barrier  // All shifts complete
+            
+            // Zero rightmost cells (divide among threads)
+            int zero_start = nx - 1;
+            int zero_end = nx + gc1;
+            int zero_chunk_size = (gc1 + nthreads - 1) / nthreads;
+            int my_zero_start = zero_start + tid * zero_chunk_size;
+            int my_zero_end = my_zero_start + zero_chunk_size;
+            if (my_zero_end > zero_end) my_zero_end = zero_end;
+            
+            for (int i = my_zero_start; i < my_zero_end; i++) {
+                E[i] = (float3){0., 0., 0.};
+                B[i] = (float3){0., 0., 0.};
+            }
         }
         
         emf->n_move++;
