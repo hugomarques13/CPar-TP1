@@ -480,30 +480,25 @@ void emf_update_gc( t_emf *emf )
 		// x
 
 		// lower
-		#pragma omp parallel
-		{
-			#pragma omp for
-			for (int i=-emf->gc[0]; i<0; i++) {
-				E[ i ].x = E[ nx + i ].x;
-				E[ i ].y = E[ nx + i ].y;
-				E[ i ].z = E[ nx + i ].z;
+		for (int i=-emf->gc[0]; i<0; i++) {
+			E[ i ].x = E[ nx + i ].x;
+			E[ i ].y = E[ nx + i ].y;
+			E[ i ].z = E[ nx + i ].z;
 
-				B[ i ].x = B[ nx + i ].x;
-				B[ i ].y = B[ nx + i ].y;
-				B[ i ].z = B[ nx + i ].z;
-			}
+			B[ i ].x = B[ nx + i ].x;
+			B[ i ].y = B[ nx + i ].y;
+			B[ i ].z = B[ nx + i ].z;
+		}
 
-			// upper
-			#pragma omp for
-			for (int i=0; i<emf->gc[1]; i++) {
-				E[ nx + i ].x = E[ i ].x;
-				E[ nx + i ].y = E[ i ].y;
-				E[ nx + i ].z = E[ i ].z;
+		// upper
+		for (int i=0; i<emf->gc[1]; i++) {
+			E[ nx + i ].x = E[ i ].x;
+			E[ nx + i ].y = E[ i ].y;
+			E[ nx + i ].z = E[ i ].z;
 
-				B[ nx + i ].x = B[ i ].x;
-				B[ nx + i ].y = B[ i ].y;
-				B[ nx + i ].z = B[ i ].z;
-			}
+			B[ nx + i ].x = B[ i ].x;
+			B[ nx + i ].y = B[ i ].y;
+			B[ nx + i ].z = B[ i ].z;
 		}
 	}
 
