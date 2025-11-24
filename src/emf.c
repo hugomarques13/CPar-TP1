@@ -519,41 +519,23 @@ void emf_move_window( t_emf *emf ){
 	    float3* const restrict E = emf -> E;
 	    float3* const restrict B = emf -> B;
 
-		float3 *ECopy = malloc(sizeof(float3) * (emf->nx + emf->gc[1] + emf->gc[0]));
-		float3 *BCopy = malloc(sizeof(float3) * (emf->nx + emf->gc[1] + emf->gc[0]));
+		// Shift data left 1 cell and zero rightmost cells
 
-		const float3 zero_fld = {0.,0.,0.};
-		
-		#pragma omp parallel
-		{
-			#pragma omp for
-			for(int i = -emf->gc[0]; i < emf->nx + emf->gc[1]; i++) {
-				ECopy[i + emf->gc[0]] = E[i];
-				BCopy[i + emf->gc[0]] = B[i];
-			}
-
-			// Shift data left 1 cell and zero rightmost cells
-			#pragma omp for
-			for (int i = -emf->gc[0]; i < emf->nx + emf->gc[1]; i++) {
-				E[ i ] = ECopy[ i + 1 + emf->gc[0]];
-				B[ i ] = BCopy[ i + 1 + emf->gc[0]];
-			}
-
-			#pragma omp for
-			for(int i = emf->nx - 1; i < emf->nx + emf->gc[1]; i ++) {
-				E[ i ] = zero_fld;
-				B[ i ] = zero_fld;
-			}
+		for (int i = -emf->gc[0]; i < emf->nx+emf->gc[1] - 1; i++) {
+			E[ i ] = E[ i + 1 ];
+			B[ i ] = B[ i + 1 ];
 		}
 
-		free(ECopy);
-		free(BCopy);
+	    const float3 zero_fld = {0.,0.,0.};
+		for(int i = emf->nx - 1; i < emf->nx+emf->gc[1]; i ++) {
+			E[ i ] = zero_fld;
+			B[ i ] = zero_fld;
+		}
 
 		// Increase moving window counter
 		emf -> n_move++;
 	}
 }
-
 /**
  * @brief Advance EM fields 1 timestep
  * 
