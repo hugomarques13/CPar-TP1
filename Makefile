@@ -18,11 +18,11 @@ LDFLAGS = -lm
 #LDFLAGS = -lm
 
 
-SOURCE = current.c emf.c particles.c random.c timer.c main.c simulation.c zdf.c
+SOURCE = src/current.c src/emf.c src/particles.c src/random.c src/timer.c src/main.c src/simulation.c src/zdf.c
 
 TARGET = zpic
 
-DOCSBASE = ../docs
+DOCSBASE = docs
 
 DOCS = $(DOCSBASE)/html/index.html
 
@@ -37,14 +37,14 @@ docs : $(DOCS)
 $(TARGET) : $(OBJ)
 	$(CC) $(CFLAGS) $(OBJ) $(LDFLAGS) -o $@
 
-%.o: %.c
+src/%.o: src/%.c
 	$(CC) -c $(CFLAGS) $< -o $@
 
 $(DOCS) : $(SOURCE)
-	@cd .. && doxygen ./Doxyfile
+	@doxygen ./Doxyfile
 
 run: all
-	./$(TARGET)
+	./zpic
 
 clean:
 	rm -f $(TARGET) $(OBJ)
