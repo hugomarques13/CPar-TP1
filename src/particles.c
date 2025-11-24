@@ -710,77 +710,78 @@ void dep_current_esk( int ix0, int di,
  * @param current   Electric current density
  */
 void dep_current_zamb( int ix0, int di,
-                        float x0, float dx,
-                        float qnx, float qvy, float qvz,
-                        t_current *current )
+                      float x0, float dx,
+                      float qnx, float qvy, float qvz,
+                      t_current *current )
 {
-    // Split the particle trajectory
-    typedef struct {
-        float x0, x1, dx, qvy, qvz;
-        int ix;
-    } t_vp;
-
-    t_vp vp[3];
-    int vnp = 1;
-
-    // split
-    vp[0].x0 = x0;
-    vp[0].dx = dx;
-
-    vp[0].x1 = x0+dx;
-
-    vp[0].qvy = qvy/2.0;
-    vp[0].qvz = qvz/2.0;
-
-    vp[0].ix = ix0;
-
-    // x split
-    if ( di != 0 ) {
-
-        //int ib = ( di+1 )>>1;
-        int ib = ( di == 1 );
-
-        float delta = (x0+dx-ib)/dx;
-
-        // Add new particle
-        vp[1].x0 = 1-ib;
-        vp[1].x1 = (x0 + dx) - di;
-        vp[1].dx = dx*delta;
-        vp[1].ix = ix0 + di;
-
-        vp[1].qvy = vp[0].qvy*delta;
-        vp[1].qvz = vp[0].qvz*delta;
-
-        // Correct previous particle
-        vp[0].x1 = ib;
-        vp[0].dx *= (1.0f-delta);
-
-        vp[0].qvy *= (1.0f-delta);
-        vp[0].qvz *= (1.0f-delta);
-
-        vnp++;
-
+    float3* restrict const J = current->J;
+    
+    // Handle no-split case separately for better performance
+    if ( di == 0 ) {
+        // Single particle deposition
+        float x1 = x0 + dx;
+        
+        float S0x0 = 1.0f - x0;
+        float S0x1 = x0;
+        float S1x0 = 1.0f - x1;
+        float S1x1 = x1;
+        
+        float half_qvy = qvy * 0.5f;
+        float half_qvz = qvz * 0.5f;
+        
+        J[ix0].x += qnx * dx;
+        J[ix0].y += half_qvy * (S0x0 + S1x0 + (S0x0 - S1x0) * 0.5f);
+        J[ix0 + 1].y += half_qvy * (S0x1 + S1x1 + (S0x1 - S1x1) * 0.5f);
+        J[ix0].z += half_qvz * (S0x0 + S1x0 + (S0x0 - S1x0) * 0.5f);
+        J[ix0 + 1].z += half_qvz * (S0x1 + S1x1 + (S0x1 - S1x1) * 0.5f);
+        
+        return;
     }
 
-    // Deposit virtual particle currents
-    float3* restrict const J = current -> J;
-
-    for (int k = 0; k < vnp; k++) {
-        float S0x[2], S1x[2];
-
-        S0x[0] = 1.0f - vp[k].x0;
-        S0x[1] = vp[k].x0;
-
-        S1x[0] = 1.0f - vp[k].x1;
-        S1x[1] = vp[k].x1;
-
-        J[ vp[k].ix     ].x += qnx * vp[k].dx;
-        J[ vp[k].ix     ].y += vp[k].qvy * (S0x[0]+S1x[0]+(S0x[0]-S1x[0])/2.0f);
-        J[ vp[k].ix + 1 ].y += vp[k].qvy * (S0x[1]+S1x[1]+(S0x[1]-S1x[1])/2.0f);
-        J[ vp[k].ix     ].z += vp[k].qvz * (S0x[0]+S1x[0]+(S0x[0]-S1x[0])/2.0f);
-        J[ vp[k].ix  +1 ].z += vp[k].qvz * (S0x[1]+S1x[1]+(S0x[1]-S1x[1])/2.0f);
-    }
-
+    // Split case
+    int ib = ( di == 1 );
+    float inv_dx = 1.0f / dx;
+    float delta = (x0 + dx - ib) * inv_dx;
+    float one_minus_delta = 1.0f - delta;
+    
+    float half_qvy = qvy * 0.5f;
+    float half_qvz = qvz * 0.5f;
+    
+    // Deposit first particle
+    float x1_p0 = (float)ib;
+    float dx_p0 = dx * one_minus_delta;
+    float qvy_p0 = half_qvy * one_minus_delta;
+    float qvz_p0 = half_qvz * one_minus_delta;
+    
+    float S0x0_p0 = 1.0f - x0;
+    float S0x1_p0 = x0;
+    float S1x0_p0 = 1.0f - x1_p0;
+    float S1x1_p0 = x1_p0;
+    
+    J[ix0].x += qnx * dx_p0;
+    J[ix0].y += qvy_p0 * (S0x0_p0 + S1x0_p0 + (S0x0_p0 - S1x0_p0) * 0.5f);
+    J[ix0 + 1].y += qvy_p0 * (S0x1_p0 + S1x1_p0 + (S0x1_p0 - S1x1_p0) * 0.5f);
+    J[ix0].z += qvz_p0 * (S0x0_p0 + S1x0_p0 + (S0x0_p0 - S1x0_p0) * 0.5f);
+    J[ix0 + 1].z += qvz_p0 * (S0x1_p0 + S1x1_p0 + (S0x1_p0 - S1x1_p0) * 0.5f);
+    
+    // Deposit second particle
+    int ix1 = ix0 + di;
+    float x0_p1 = 1.0f - ib;
+    float x1_p1 = (x0 + dx) - di;
+    float dx_p1 = dx * delta;
+    float qvy_p1 = half_qvy * delta;
+    float qvz_p1 = half_qvz * delta;
+    
+    float S0x0_p1 = 1.0f - x0_p1;
+    float S0x1_p1 = x0_p1;
+    float S1x0_p1 = 1.0f - x1_p1;
+    float S1x1_p1 = x1_p1;
+    
+    J[ix1].x += qnx * dx_p1;
+    J[ix1].y += qvy_p1 * (S0x0_p1 + S1x0_p1 + (S0x0_p1 - S1x0_p1) * 0.5f);
+    J[ix1 + 1].y += qvy_p1 * (S0x1_p1 + S1x1_p1 + (S0x1_p1 - S1x1_p1) * 0.5f);
+    J[ix1].z += qvz_p1 * (S0x0_p1 + S1x0_p1 + (S0x0_p1 - S1x0_p1) * 0.5f);
+    J[ix1 + 1].z += qvz_p1 * (S0x1_p1 + S1x1_p1 + (S0x1_p1 - S1x1_p1) * 0.5f);
 }
 
 /*********************************************************************************************
