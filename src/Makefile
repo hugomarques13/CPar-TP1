@@ -1,8 +1,8 @@
 # GCC options
-CC = gcc
-CFLAGS = -Ofast -g -std=c99 -fopenmp -pedantic -Wall -march=native -fno-omit-frame-pointer
+#CC = gcc
+#CFLAGS = -Ofast -g -std=c99 -fopenmp -pedantic -Wall -march=native -fno-omit-frame-pointer
 #CFLAGS = -Kfast -std=c99 
-LDFLAGS = -lm
+#LDFLAGS = -lm
 
 #Debug options
 #CFLAGS = -g -Og -std=c99 -pedantic -fsanitize=undefined -fsanitize=address
@@ -13,9 +13,9 @@ LDFLAGS = -lm
 #LDFLAGS =
 
 # Clang options
-#CC = clang
-#CFLAGS = -Ofast -std=c99 -pedantic
-#LDFLAGS = -lm
+CC = clang
+CFLAGS = -Ofast -std=c99 -pedantic -fopenmp -march=native -fno-omit-frame-pointer
+LDFLAGS = -lm
 
 
 SOURCE = current.c emf.c particles.c random.c timer.c main.c simulation.c zdf.c
