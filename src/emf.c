@@ -523,20 +523,18 @@ void emf_move_window( t_emf *emf ){
 
         // Shift data left 1 cell and zero rightmost cells
 		
-		#pragma omp parallel
-		{
-			#pragma omp for schedule(static)
-			for (int i = -emf->gc[0]; i < emf->nx+emf->gc[1] - 1; i++) {
-				E[ i ] = E[ i + 1 ];
-				B[ i ] = B[ i + 1 ];
-			}
 
-			#pragma omp for schedule(static)
-			for(int i = emf->nx - 1; i < emf->nx+emf->gc[1]; i ++) {
-				E[ i ] = zero_fld;
-				B[ i ] = zero_fld;
-			}
+		for (int i = -emf->gc[0]; i < emf->nx+emf->gc[1] - 1; i++) {
+			E[ i ] = E[ i + 1 ];
+			B[ i ] = B[ i + 1 ];
 		}
+
+		#pragma omp for schedule(static)
+		for(int i = emf->nx - 1; i < emf->nx+emf->gc[1]; i ++) {
+			E[ i ] = zero_fld;
+			B[ i ] = zero_fld;
+		}
+		
 
         // Increase moving window counter
         emf -> n_move++;
