@@ -20,7 +20,7 @@ LDFLAGS = -lm
 
 SOURCE = current.c emf.c particles.c random.c timer.c main.c simulation.c zdf.c
 
-TARGET = zpic
+TARGET = ../zpic
 
 DOCSBASE = ../docs
 
@@ -44,7 +44,7 @@ $(DOCS) : $(SOURCE)
 	@cd .. && doxygen ./Doxyfile
 
 run: all
-	./$(TARGET)
+	cd .. && ./zpic
 
 clean:
 	rm -f $(TARGET) $(OBJ)
