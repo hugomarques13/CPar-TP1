@@ -308,7 +308,7 @@ void kernel_x( t_current* const current, const float sa, const float sb ){
         }
     }
     
-    free(JCopy);
+    free(J_copy);
 
 }
 
