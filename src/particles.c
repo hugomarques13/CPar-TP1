@@ -718,9 +718,8 @@ void dep_current_esk( int ix0, int di,
 void dep_current_zamb( int ix0, int di,
                       float x0, float dx,
                       float qnx, float qvy, float qvz,
-                      t_current *current )
+                      float3* restrict const J )
 {
-    float3* restrict const J = current->J;
     
     // Handle no-split case separately for better performance
     if ( di == 0 ) {
@@ -735,19 +734,14 @@ void dep_current_zamb( int ix0, int di,
         float half_qvy = qvy * 0.5f;
         float half_qvz = qvz * 0.5f;
         
-        #pragma omp atomic
         J[ix0].x += qnx * dx;
 
-        #pragma omp atomic
         J[ix0].y += half_qvy * (S0x0 + S1x0 + (S0x0 - S1x0) * 0.5f);
 
-        #pragma omp atomic
         J[ix0 + 1].y += half_qvy * (S0x1 + S1x1 + (S0x1 - S1x1) * 0.5f);
 
-        #pragma omp atomic
         J[ix0].z += half_qvz * (S0x0 + S1x0 + (S0x0 - S1x0) * 0.5f);
 
-        #pragma omp atomic
         J[ix0 + 1].z += half_qvz * (S0x1 + S1x1 + (S0x1 - S1x1) * 0.5f);
         
         return;
@@ -773,19 +767,14 @@ void dep_current_zamb( int ix0, int di,
     float S1x0_p0 = 1.0f - x1_p0;
     float S1x1_p0 = x1_p0;
     
-    #pragma omp atomic
     J[ix0].x += qnx * dx_p0;
 
-    #pragma omp atomic
     J[ix0].y += qvy_p0 * (S0x0_p0 + S1x0_p0 + (S0x0_p0 - S1x0_p0) * 0.5f);
 
-    #pragma omp atomic
     J[ix0 + 1].y += qvy_p0 * (S0x1_p0 + S1x1_p0 + (S0x1_p0 - S1x1_p0) * 0.5f);
 
-    #pragma omp atomic
     J[ix0].z += qvz_p0 * (S0x0_p0 + S1x0_p0 + (S0x0_p0 - S1x0_p0) * 0.5f);
 
-    #pragma omp atomic
     J[ix0 + 1].z += qvz_p0 * (S0x1_p0 + S1x1_p0 + (S0x1_p0 - S1x1_p0) * 0.5f);
     
     // Deposit second particle
@@ -801,19 +790,14 @@ void dep_current_zamb( int ix0, int di,
     float S1x0_p1 = 1.0f - x1_p1;
     float S1x1_p1 = x1_p1;
     
-    #pragma omp atomic
     J[ix1].x += qnx * dx_p1;
 
-    #pragma omp atomic
     J[ix1].y += qvy_p1 * (S0x0_p1 + S1x0_p1 + (S0x0_p1 - S1x0_p1) * 0.5f);
 
-    #pragma omp atomic
     J[ix1 + 1].y += qvy_p1 * (S0x1_p1 + S1x1_p1 + (S0x1_p1 - S1x1_p1) * 0.5f);
 
-    #pragma omp atomic
     J[ix1].z += qvz_p1 * (S0x0_p1 + S1x0_p1 + (S0x0_p1 - S1x0_p1) * 0.5f);
 
-    #pragma omp atomic
     J[ix1 + 1].z += qvz_p1 * (S0x1_p1 + S1x1_p1 + (S0x1_p1 - S1x1_p1) * 0.5f);
 }
 
@@ -971,109 +955,132 @@ void spec_advance( t_species* spec, t_emf* emf, t_current* current )
 
     double energy = 0;
 
+    // Allocate thread-local current accumulation arrays
+    float3** J_thread = NULL;
+    int nthreads = 1;
+    
     #pragma omp parallel
-    #pragma omp for reduction(+:energy)
-    // Advance particles
-    for (int i=0; i<spec->np; i++) {
+    {
+        #pragma omp single
+        {
+            nthreads = omp_get_num_threads();
+            J_thread = (float3**) malloc(nthreads * sizeof(float3*));
+            for (int t = 0; t < nthreads; t++) {
+                J_thread[t] = (float3*) calloc(nx0 + 1, sizeof(float3));
+            }
+        }
+        
+        int tid = omp_get_thread_num();
+        
+        #pragma omp for reduction(+:energy)
+        // Advance particles
+        for (int i=0; i<spec->np; i++) {
 
-        float3 Ep, Bp;
-        float utx, uty, utz;
-        float ux, uy, uz, u2;
-        float gamma, rg, gtem, otsq;
+            float3 Ep, Bp;
+            float utx, uty, utz;
+            float ux, uy, uz, u2;
+            float gamma, rg, gtem, otsq;
 
-        float x1;
+            float x1;
 
-        int di;
-        float dx;
+            int di;
+            float dx;
 
-        // Load particle momenta
-        ux = spec -> part[i].ux;
-        uy = spec -> part[i].uy;
-        uz = spec -> part[i].uz;
+            // Load particle momenta
+            ux = spec -> part[i].ux;
+            uy = spec -> part[i].uy;
+            uz = spec -> part[i].uz;
 
-        // interpolate fields
-        interpolate_fld( emf -> E_part, emf -> B_part, &spec -> part[i], &Ep, &Bp );
-        // Ep.x = Ep.y = Ep.z = Bp.x = Bp.y = Bp.z = 0;
+            // interpolate fields
+            interpolate_fld( emf -> E_part, emf -> B_part, &spec -> part[i], &Ep, &Bp );
+            // Ep.x = Ep.y = Ep.z = Bp.x = Bp.y = Bp.z = 0;
 
-        // advance u using Boris scheme
-        Ep.x *= tem;
-        Ep.y *= tem;
-        Ep.z *= tem;
+            // advance u using Boris scheme
+            Ep.x *= tem;
+            Ep.y *= tem;
+            Ep.z *= tem;
 
-        utx = ux + Ep.x;
-        uty = uy + Ep.y;
-        utz = uz + Ep.z;
+            utx = ux + Ep.x;
+            uty = uy + Ep.y;
+            utz = uz + Ep.z;
 
-        // Perform first half of the rotation
-        // Get time centered gamma
-        u2 = utx*utx + uty*uty + utz*utz;
-        gamma = sqrtf( 1 + u2 );
+            // Perform first half of the rotation
+            // Get time centered gamma
+            u2 = utx*utx + uty*uty + utz*utz;
+            gamma = sqrtf( 1 + u2 );
 
-        // Accumulate time centered energy
-        energy += u2 / ( 1 + gamma );
+            // Accumulate time centered energy
+            energy += u2 / ( 1 + gamma );
 
-        gtem = tem / gamma;
+            gtem = tem / gamma;
 
-        Bp.x *= gtem;
-        Bp.y *= gtem;
-        Bp.z *= gtem;
+            Bp.x *= gtem;
+            Bp.y *= gtem;
+            Bp.z *= gtem;
 
-        otsq = 2.0f / ( 1.0f + Bp.x*Bp.x + Bp.y*Bp.y + Bp.z*Bp.z );
+            otsq = 2.0f / ( 1.0f + Bp.x*Bp.x + Bp.y*Bp.y + Bp.z*Bp.z );
 
-        ux = utx + uty*Bp.z - utz*Bp.y;
-        uy = uty + utz*Bp.x - utx*Bp.z;
-        uz = utz + utx*Bp.y - uty*Bp.x;
+            ux = utx + uty*Bp.z - utz*Bp.y;
+            uy = uty + utz*Bp.x - utx*Bp.z;
+            uz = utz + utx*Bp.y - uty*Bp.x;
 
-        // Perform second half of the rotation
+            // Perform second half of the rotation
 
-        Bp.x *= otsq;
-        Bp.y *= otsq;
-        Bp.z *= otsq;
+            Bp.x *= otsq;
+            Bp.y *= otsq;
+            Bp.z *= otsq;
 
-        utx += uy*Bp.z - uz*Bp.y;
-        uty += uz*Bp.x - ux*Bp.z;
-        utz += ux*Bp.y - uy*Bp.x;
+            utx += uy*Bp.z - uz*Bp.y;
+            uty += uz*Bp.x - ux*Bp.z;
+            utz += ux*Bp.y - uy*Bp.x;
 
-        // Perform second half of electric field acceleration
-        ux = utx + Ep.x;
-        uy = uty + Ep.y;
-        uz = utz + Ep.z;
+            // Perform second half of electric field acceleration
+            ux = utx + Ep.x;
+            uy = uty + Ep.y;
+            uz = utz + Ep.z;
 
-        // Store new momenta
-        spec -> part[i].ux = ux;
-        spec -> part[i].uy = uy;
-        spec -> part[i].uz = uz;
+            // Store new momenta
+            spec -> part[i].ux = ux;
+            spec -> part[i].uy = uy;
+            spec -> part[i].uz = uz;
 
-        // push particle
-        rg = 1.0f / sqrtf(1.0f + ux*ux + uy*uy + uz*uz);
+            // push particle
+            rg = 1.0f / sqrtf(1.0f + ux*ux + uy*uy + uz*uz);
 
-        dx = dt_dx * rg * ux;
+            dx = dt_dx * rg * ux;
 
-        x1 = spec -> part[i].x + dx;
+            x1 = spec -> part[i].x + dx;
 
-        di = ltrim(x1);
+            di = ltrim(x1);
 
-        x1 -= di;
+            x1 -= di;
 
-        float qvy = spec->q * uy * rg;
-        float qvz = spec->q * uz * rg;
+            float qvy = spec->q * uy * rg;
+            float qvz = spec->q * uz * rg;
 
-        // deposit current using Eskirepov method
-        // dep_current_esk( spec -> part[i].ix, di,
-        // 				 spec -> part[i].x, x1,
-        // 				 qnx, qvy, qvz,
-        // 				 current );
+            // deposit current using Zamb method to thread-local array
+            dep_current_zamb( spec -> part[i].ix, di,
+                             spec -> part[i].x, dx,
+                             qnx, qvy, qvz,
+                             J_thread[tid] );
 
-        dep_current_zamb( spec -> part[i].ix, di,
-                         spec -> part[i].x, dx,
-                         qnx, qvy, qvz,
-                         current );
+            // Store results
+            spec -> part[i].x = x1;
+            spec -> part[i].ix += di;
 
-        // Store results
-        spec -> part[i].x = x1;
-        spec -> part[i].ix += di;
-
+        }
     }
+
+    // Combine thread-local arrays into shared current array
+    for (int t = 0; t < nthreads; t++) {
+        for (int i = 0; i <= nx0; i++) {
+            current->J[i].x += J_thread[t][i].x;
+            current->J[i].y += J_thread[t][i].y;
+            current->J[i].z += J_thread[t][i].z;
+        }
+        free(J_thread[t]);
+    }
+    free(J_thread);
 
     // Store energy
     spec -> energy = spec-> q * spec -> m_q * energy * spec -> dx;
